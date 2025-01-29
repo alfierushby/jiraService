@@ -1,3 +1,4 @@
+import json
 import os
 import threading
 
@@ -5,6 +6,7 @@ from flask import Flask, jsonify
 import boto3
 from jira import JIRA
 from dotenv import load_dotenv
+from pydantic import Field, BaseModel
 
 load_dotenv()
 
@@ -21,6 +23,11 @@ JIRA_PROJECT_KEY = os.getenv("JIRA_PROJECT_KEY")
 
 app = Flask(__name__)
 
+# Want the minimum length to be at least 1, otherwise "" can be sent which breaks certain APIs.
+class Request(BaseModel):
+    title: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1)
+    priority: str = Field(..., min_length=1)
 
 def poll_sqs_jira_loop():
     """
@@ -39,14 +46,16 @@ def poll_sqs_jira_loop():
 
             for message in messages:
                 receipt_handle = message['ReceiptHandle']
-                message = eval(message['Body'])
+                body = json.loads(message['Body'])
 
-                print(f"Message Body: {message}")
+                handled_body = Request(**body).model_dump()
+
+                print(f"Message Body: {handled_body}")
 
                 issue_data = {
                     "project": {"key": JIRA_PROJECT_KEY},
-                    "summary": message["title"],
-                    "description": message["description"],
+                    "summary": handled_body["title"],
+                    "description": handled_body["description"],
                     "issuetype": {"name": "Task"}
                 }
 
