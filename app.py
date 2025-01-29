@@ -29,9 +29,9 @@ def poll_sqs_jira_loop():
     while True:
         try:
             response = sqs_client.receive_message(
-                QueueUrl=P2_QUEUE_URL,WaitTimeSeconds=20)
+                QueueUrl=P2_QUEUE_URL, WaitTimeSeconds=20)
 
-            messages = response.get("Messages",[])
+            messages = response.get("Messages", [])
 
             if not messages:
                 print("No messages available")
@@ -44,7 +44,7 @@ def poll_sqs_jira_loop():
                 print(f"Message Body: {message}")
 
                 issue_data = {
-                    "project":{"key":JIRA_PROJECT_KEY},
+                    "project": {"key": JIRA_PROJECT_KEY},
                     "summary": message["title"],
                     "description": message["description"],
                     "issuetype": {"name": "Task"}
@@ -52,16 +52,19 @@ def poll_sqs_jira_loop():
 
                 jira_client.create_issue(fields=issue_data)
 
-                sqs_client.delete_message(QueueUrl=P2_QUEUE_URL,ReceiptHandle=receipt_handle)
+                sqs_client.delete_message(QueueUrl=P2_QUEUE_URL, ReceiptHandle=receipt_handle)
 
         except Exception as e:
             print(f"Error, cannot poll: {e}")
 
-
+@app.route('/health',methods=["GET"])
+def health_check():
+    """ Checks health, endpoint """
+    return jsonify({"status":"healthy"}),200
 
 if __name__ == '__main__':
     sqs_client = boto3.client('sqs', region_name=AWS_REGION, aws_access_key_id=ACCESS_KEY,
-    aws_secret_access_key=ACCESS_SECRET)
+                              aws_secret_access_key=ACCESS_SECRET)
     jira_client = JIRA(server=JIRA_SERVER, basic_auth=(JIRA_EMAIL, JIRA_API_TOKEN))
 
     sqs_thread = threading.Thread(target=poll_sqs_jira_loop, daemon=True)
