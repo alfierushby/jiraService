@@ -22,9 +22,9 @@ JIRA_PROJECT_KEY = os.getenv("JIRA_PROJECT_KEY")
 app = Flask(__name__)
 
 
-def poll_sqs_teams_loop():
+def poll_sqs_jira_loop():
     """
-    Constantly checks SQS queue for messages and processes them to send to teams if possible
+    Constantly checks SQS queue for messages and processes them to send to jira if possible
     """
     while True:
         try:
@@ -68,7 +68,7 @@ if __name__ == '__main__':
     sqs_client = boto3.client('sqs', region_name=AWS_REGION, aws_access_key_id=ACCESS_KEY,
     aws_secret_access_key=ACCESS_SECRET)
     jira_client = JIRA(server=JIRA_SERVER, basic_auth=(JIRA_EMAIL, JIRA_API_TOKEN))
-    print("test")
-    sqs_thread = threading.Thread(target=poll_sqs_teams_loop,daemon=True)
+
+    sqs_thread = threading.Thread(target=poll_sqs_jira_loop, daemon=True)
     sqs_thread.start()
     app.run()
