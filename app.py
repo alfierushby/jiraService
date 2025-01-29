@@ -6,6 +6,7 @@ from flask import Flask, jsonify
 import boto3
 from jira import JIRA
 from dotenv import load_dotenv
+from prometheus_flask_exporter import PrometheusMetrics, Counter
 from pydantic import Field, BaseModel
 
 load_dotenv()
@@ -22,6 +23,15 @@ JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN")
 JIRA_PROJECT_KEY = os.getenv("JIRA_PROJECT_KEY")
 
 app = Flask(__name__)
+
+# Initialize Prometheus Metrics once
+metrics = PrometheusMetrics(app)
+
+request_counter = Counter(
+    "priority_requests_total",
+    "Total priority requests processed",
+    labelnames=["priority"]
+)
 
 # Want the minimum length to be at least 1, otherwise "" can be sent which breaks certain APIs.
 class Request(BaseModel):
@@ -60,6 +70,8 @@ def poll_sqs_jira_loop():
                 }
 
                 jira_client.create_issue(fields=issue_data)
+
+                request_counter.labels(priority="High").inc()
 
                 sqs_client.delete_message(QueueUrl=P2_QUEUE_URL, ReceiptHandle=receipt_handle)
 
