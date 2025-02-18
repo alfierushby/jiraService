@@ -12,4 +12,4 @@ ENV JIRA_SERVER=""
 ENV JIRA_PROJECT_KEY=""
 ENV JIRA_EMAIL=""
 ENV JIRA_API_TOKEN=""
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "app:create_app()"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "-c","gunicorn_config.py","app:create_app()"]

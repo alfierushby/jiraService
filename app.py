@@ -1,6 +1,7 @@
 import json
 import os
 import threading
+import logging
 
 from flask import Flask, jsonify
 import boto3
@@ -9,6 +10,8 @@ from dotenv import load_dotenv
 from prometheus_flask_exporter import PrometheusMetrics, Counter
 from pydantic import Field, BaseModel
 
+
+stop_event = threading.Event()
 load_dotenv()
 
 AWS_REGION = os.getenv('AWS_REGION')
@@ -28,6 +31,8 @@ request_counter = Counter(
     labelnames=["priority"]
 )
 
+gunicorn_logger = logging.getLogger("gunicorn.error")
+
 # Want the minimum length to be at least 1, otherwise "" can be sent which breaks certain APIs.
 class Request(BaseModel):
     title: str = Field(..., min_length=1)
@@ -38,16 +43,16 @@ def poll_sqs_jira_loop(sqs_client, jira_client):
     """
     Constantly checks SQS queue for messages and processes them to send to jira if possible
     """
-    while True:
+    while not stop_event.is_set():
         try:
             response = sqs_client.receive_message(
-                QueueUrl=P2_QUEUE_URL, WaitTimeSeconds=20)
+                QueueUrl=P2_QUEUE_URL, WaitTimeSeconds=2)
 
             messages = response.get("Messages", [])
 
             if not messages:
                 # Use logging instead!!
-                print("No messages available")
+                gunicorn_logger.info("No messages available")
                 continue
 
             for message in messages:
@@ -56,7 +61,7 @@ def poll_sqs_jira_loop(sqs_client, jira_client):
 
                 handled_body = Request(**body).model_dump()
 
-                print(f"Message Body: {handled_body}")
+                gunicorn_logger.info(f"Message Body: {handled_body}")
 
                 issue_data = {
                     "project": {"key": JIRA_PROJECT_KEY},
@@ -73,7 +78,7 @@ def poll_sqs_jira_loop(sqs_client, jira_client):
 
         except Exception as e:
             # Use logging instead!!
-            print(f"Error, cannot poll: {e}")
+            gunicorn_logger.info(f"Error, cannot poll: {e}")
 
 def create_app():
     app = Flask(__name__)
