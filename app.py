@@ -46,7 +46,7 @@ def poll_sqs_jira_loop(sqs_client, jira_client):
     while not stop_event.is_set():
         try:
             response = sqs_client.receive_message(
-                QueueUrl=P2_QUEUE_URL, WaitTimeSeconds=2)
+                QueueUrl=P2_QUEUE_URL, WaitTimeSeconds=20)
 
             messages = response.get("Messages", [])
 
