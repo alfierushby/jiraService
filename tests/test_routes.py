@@ -26,7 +26,7 @@ def test_medium_priority_post(client):
     sqs.send_message(QueueUrl=queue_url, MessageBody=json.dumps(external_data))
 
     # Wait for processing.
-
+    time.sleep(4)
     # Should be empty
     response = sqs.receive_message(
         QueueUrl=queue_url,

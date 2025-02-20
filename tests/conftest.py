@@ -27,7 +27,7 @@ def app():
             # Override priority queues with test values
             config = TestConfig(queue_url=queue)
 
-            app = create_app(config=config)
+            app = create_app(config=config,jira_client=mock_jira_instance)
 
             yield app
 
