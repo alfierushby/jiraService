@@ -10,20 +10,9 @@ from dotenv import load_dotenv
 from prometheus_flask_exporter import PrometheusMetrics, Counter
 from pydantic import Field, BaseModel
 
+from config import BaseConfig
 
 stop_event = threading.Event()
-load_dotenv()
-
-AWS_REGION = os.getenv('AWS_REGION')
-P2_QUEUE_URL = os.getenv('P2_QUEUE_URL')
-TEAMS_WEBHOOK_URL = os.getenv('TEAMS_WEBHOOK_URL')
-ACCESS_KEY = os.getenv('AWS_ACCESS_KEY_ID')
-ACCESS_SECRET = os.getenv('AWS_SECRET_ACCESS_KEY')
-
-JIRA_SERVER = os.getenv("JIRA_SERVER")
-JIRA_EMAIL = os.getenv("JIRA_EMAIL")
-JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN")
-JIRA_PROJECT_KEY = os.getenv("JIRA_PROJECT_KEY")
 
 request_counter = Counter(
     "priority_requests_total",
@@ -33,26 +22,27 @@ request_counter = Counter(
 
 gunicorn_logger = logging.getLogger("gunicorn.error")
 
+
 # Want the minimum length to be at least 1, otherwise "" can be sent which breaks certain APIs.
 class Request(BaseModel):
     title: str = Field(..., min_length=1)
     description: str = Field(..., min_length=1)
     priority: str = Field(..., min_length=1)
 
-def poll_sqs_jira_loop(sqs_client, jira_client):
+
+def poll_sqs_jira_loop(sqs_client, jira_client, config):
     """
     Constantly checks SQS queue for messages and processes them to send to jira if possible
     """
     while not stop_event.is_set():
         try:
             response = sqs_client.receive_message(
-                QueueUrl=P2_QUEUE_URL, WaitTimeSeconds=20)
+                QueueUrl=config.PRIORITY_QUEUE, WaitTimeSeconds=20)
 
             messages = response.get("Messages", [])
 
             if not messages:
-                # Use logging instead!!
-                gunicorn_logger.info("No messages available")
+                print("No messages available")
                 continue
 
             for message in messages:
@@ -64,7 +54,7 @@ def poll_sqs_jira_loop(sqs_client, jira_client):
                 gunicorn_logger.info(f"Message Body: {handled_body}")
 
                 issue_data = {
-                    "project": {"key": JIRA_PROJECT_KEY},
+                    "project": {"key": config.JIRA_PROJECT_KEY},
                     "summary": handled_body["title"],
                     "description": handled_body["description"],
                     "issuetype": {"name": "Task"}
@@ -74,32 +64,40 @@ def poll_sqs_jira_loop(sqs_client, jira_client):
 
                 request_counter.labels(priority="High").inc()
 
-                sqs_client.delete_message(QueueUrl=P2_QUEUE_URL, ReceiptHandle=receipt_handle)
+                sqs_client.delete_message(QueueUrl=config.PRIORITY_QUEUE, ReceiptHandle=receipt_handle)
 
         except Exception as e:
             # Use logging instead!!
             gunicorn_logger.info(f"Error, cannot poll: {e}")
 
-def create_app():
+
+def create_app(sqs_client=None, jira_client=None, config=None):
     app = Flask(__name__)
 
     # Initialize Prometheus Metrics once
     metrics = PrometheusMetrics(app)
 
-    sqs_client = boto3.client('sqs', region_name=AWS_REGION, aws_access_key_id=ACCESS_KEY,
-                              aws_secret_access_key=ACCESS_SECRET)
-    jira_client = JIRA(server=JIRA_SERVER, basic_auth=(JIRA_EMAIL, JIRA_API_TOKEN))
+    if config is None:
+        config = BaseConfig()
+    if sqs_client is None:
+        sqs_client = boto3.client('sqs', region_name=config.AWS_REGION, aws_access_key_id=config.AWS_ACCESS_KEY_ID,
+                                  aws_secret_access_key=config.AWS_SECRET_ACCESS_KEY)
+    if jira_client is None:
+        jira_client = JIRA(server=config.JIRA_SERVER, basic_auth=(config.JIRA_EMAIL, config.JIRA_API_TOKEN))
 
-    sqs_thread = threading.Thread(target=poll_sqs_jira_loop,args=(sqs_client,jira_client), daemon=True)
+    sqs_thread = threading.Thread(target=poll_sqs_jira_loop, args=(sqs_client, jira_client,config), daemon=True)
     sqs_thread.start()
 
+    # Store configuration in app config for other entities
+    app.config.from_object(config)
 
-    @app.route('/health',methods=["GET"])
+    @app.route('/health', methods=["GET"])
     def health_check():
         """ Checks health, endpoint """
-        return jsonify({"status":"healthy"}),200
+        return jsonify({"status": "healthy"}), 200
 
     return app
+
 
 if __name__ == '__main__':
     create_app().run()
