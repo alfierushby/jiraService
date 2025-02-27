@@ -68,7 +68,7 @@ def poll_sqs_jira_loop(sqs_client, jira_client, config):
 
         except Exception as e:
             # Use logging instead!!
-            gunicorn_logger.info(f"Error, cannot poll: {e}")
+            gunicorn_logger.info(f"Error, cannot poll: {e}.")
 
 
 def create_app(sqs_client=None, jira_client=None, config=None):
