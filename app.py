@@ -80,8 +80,7 @@ def create_app(sqs_client=None, jira_client=None, config=None):
     if config is None:
         config = BaseConfig()
     if sqs_client is None:
-        sqs_client = boto3.client('sqs', region_name=config.AWS_REGION, aws_access_key_id=config.AWS_ACCESS_KEY_ID,
-                                  aws_secret_access_key=config.AWS_SECRET_ACCESS_KEY)
+        sqs_client = boto3.client('sqs', region_name=config.AWS_REGION)
     if jira_client is None:
         jira_client = JIRA(server=config.JIRA_SERVER, basic_auth=(config.JIRA_EMAIL, config.JIRA_API_TOKEN))
 
