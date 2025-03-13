@@ -1,11 +1,16 @@
+import json
 import os
 
 import boto3
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, Mock
 from config import TestConfig
 from app import create_app
 from moto import mock_aws
+
+mock_body = Mock()
+mock_body.read.return_value = json.dumps({"results": [{"outputText": "Testing"}]})
+mock_response = {"body": mock_body}
 
 @pytest.fixture
 def app():
@@ -19,6 +24,10 @@ def app():
             #  Create mock queue
             queue = sqs.create_queue(QueueName="test")["QueueUrl"]
 
+            # Mock bedrock
+            bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
+            bedrock.invoke_model = MagicMock(return_value=mock_response)
+
             # Override the send message to be true
             mock_jira_instance = MagicMock()
             mock_jira_instance.create_issue.return_value = True # True for sent issue
@@ -27,7 +36,7 @@ def app():
             # Override priority queues with test values
             config = TestConfig(queue_url=queue)
 
-            app = create_app(config=config,jira_client=mock_jira_instance)
+            app = create_app(config=config,jira_client=mock_jira_instance,bedrock_client=bedrock)
 
             yield app
 
